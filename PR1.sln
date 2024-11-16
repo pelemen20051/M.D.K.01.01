@@ -1,25 +1,191 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.11.35222.181
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PR1", "PR1\PR1.csproj", "{1B0E4070-9C05-4EE5-907A-72D33F5634C0}"
-EndProject
-Global
-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{1B0E4070-9C05-4EE5-907A-72D33F5634C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1B0E4070-9C05-4EE5-907A-72D33F5634C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1B0E4070-9C05-4EE5-907A-72D33F5634C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1B0E4070-9C05-4EE5-907A-72D33F5634C0}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {18CEF0FD-13E2-462B-998E-4C772F373C34}
-	EndGlobalSection
-EndGlobal
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace BlackJackWithBalance
+{
+    public partial class MainForm : Form
+    {
+        private List<string> deck; // Колода карт
+        private List<string> playerHand; // Рука игрока
+        private List<string> dealerHand; // Рука дилера
+        private Random random;
+        private int playerBalance; // Баланс игрока
+        private int currentBet; // Текущая ставка
+
+        public MainForm()
+        {
+            InitializeComponent();
+            InitializeGame();
+        }
+
+        private void InitializeGame()
+        {
+            random = new Random();
+            playerBalance = 1000; // Начальный баланс
+            ResetGame();
+            UpdateBalanceDisplay();
+        }
+
+        private void ResetGame()
+        {
+            // Создаём колоду карт
+            string[] suits = { "♠", "♥", "♦", "♣" };
+            string[] ranks = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+            deck = suits.SelectMany(suit => ranks.Select(rank => rank + suit)).ToList();
+            ShuffleDeck();
+
+            playerHand = new List<string>();
+            dealerHand = new List<string>();
+
+            lblPlayerCards.Text = "";
+            lblDealerCards.Text = "Карты скрыты";
+            lblResult.Text = "Сделайте ставку, чтобы начать игру.";
+            btnHit.Enabled = false;
+            btnStand.Enabled = false;
+        }
+
+        private void ShuffleDeck()
+        {
+            deck = deck.OrderBy(_ => random.Next()).ToList();
+        }
+
+        private void DealCard(List<string> hand)
+        {
+            if (deck.Count > 0)
+            {
+                hand.Add(deck[0]);
+                deck.RemoveAt(0);
+            }
+        }
+
+        private int CalculateScore(List<string> hand)
+        {
+            int score = 0;
+            int aceCount = 0;
+
+            foreach (string card in hand)
+            {
+                string rank = card.Substring(0, card.Length - 1);
+                if (int.TryParse(rank, out int value))
+                {
+                    score += value;
+                }
+                else if (rank == "A")
+                {
+                    score += 11;
+                    aceCount++;
+                }
+                else
+                {
+                    score += 10;
+                }
+            }
+
+            while (score > 21 && aceCount > 0)
+            {
+                score -= 10;
+                aceCount--;
+            }
+
+            return score;
+        }
+
+        private void btnBet_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtBet.Text, out currentBet) || currentBet <= 0 || currentBet > playerBalance)
+            {
+                lblResult.Text = "Введите корректную ставку!";
+                return;
+            }
+
+            playerBalance -= currentBet; // Снимаем ставку
+            UpdateBalanceDisplay();
+
+            // Раздаём начальные карты
+            DealCard(playerHand);
+            DealCard(playerHand);
+            DealCard(dealerHand);
+            DealCard(dealerHand);
+
+            lblPlayerCards.Text = string.Join(", ", playerHand);
+            lblDealerCards.Text = dealerHand[0] + ", ?";
+            lblResult.Text = "Ваш ход: Взять карту или остановиться.";
+
+            btnHit.Enabled = true;
+            btnStand.Enabled = true;
+            btnBet.Enabled = false;
+        }
+
+        private void btnHit_Click(object sender, EventArgs e)
+        {
+            DealCard(playerHand);
+            lblPlayerCards.Text = string.Join(", ", playerHand);
+
+            int playerScore = CalculateScore(playerHand);
+            if (playerScore > 21)
+            {
+                lblResult.Text = "Перебор! Вы проиграли.";
+                EndGame(false);
+            }
+        }
+
+        private void btnStand_Click(object sender, EventArgs e)
+        {
+            lblDealerCards.Text = string.Join(", ", dealerHand);
+
+            while (CalculateScore(dealerHand) < 17)
+            {
+                DealCard(dealerHand);
+                lblDealerCards.Text = string.Join(", ", dealerHand);
+            }
+
+            int playerScore = CalculateScore(playerHand);
+            int dealerScore = CalculateScore(dealerHand);
+
+            if (dealerScore > 21 || playerScore > dealerScore)
+            {
+                lblResult.Text = "Вы выиграли!";
+                EndGame(true);
+            }
+            else if (playerScore < dealerScore)
+            {
+                lblResult.Text = "Дилер выиграл!";
+                EndGame(false);
+            }
+            else
+            {
+                lblResult.Text = "Ничья!";
+                EndGame(null);
+            }
+        }
+
+        private void EndGame(bool? playerWon)
+        {
+            if (playerWon == true)
+            {
+                playerBalance += currentBet * 2; // Игрок выигрывает удвоенную ставку
+            }
+            else if (playerWon == null)
+            {
+                playerBalance += currentBet; // В случае ничьей возвращаем ставку
+            }
+
+            UpdateBalanceDisplay();
+            btnHit.Enabled = false;
+            btnStand.Enabled = false;
+            btnBet.Enabled = true;
+        }
+
+        private void btnRestart_Click(object sender, EventArgs e)
+        {
+            ResetGame();
+        }
+
+        private void UpdateBalanceDisplay()
+        {
+            lblBalance.Text = $"Баланс: {playerBalance} $";
+        }
+    }
+}
